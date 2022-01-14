@@ -1,0 +1,143 @@
+# This is a sample build configuration for Other.
+# Check our guides at https://confluence.atlassian.com/x/5Q4SMw for more examples.
+# Only use spaces to indent your .yml configuration.
+# -----
+# You can specify a custom docker image from Docker Hub as your build environment.
+#image: atlassian/default-image:2
+#image: mklinski/salesforce
+#image: amkor/docker-salesforce
+image:
+    name: mklinski/salesforce
+pipelines:
+    custom: 
+        Deploy to Integration and Partial:
+            - parallel:
+                - step:
+                    name: Deploy to Integration
+                    script:
+                      - echo "deploying to Integration..."
+                      - ant -buildfile build/build.xml deployCodeRunLocalTests -Dsfdc.username=$default_SFDC_USERNAME$intg_ENV_SUFFIX -Dsfdc.password=$intg_SFDC_PASS$intg_SFDC_TOKEN -Dsfdc.serverurl=https://$intg_SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL
+                - step:
+                    name: Deploy to Partial
+                    script:
+                      - echo "deploying to Partial..."
+                      - ant -buildfile build/build.xml deployCodeRunLocalTests -Dsfdc.username=$default_SFDC_USERNAME$partial_ENV_SUFFIX -Dsfdc.password=$partial_SFDC_PASS$partial_SFDC_TOKEN -Dsfdc.serverurl=https://$partial_SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL
+        Deploy To Partial:
+            - step:
+                name: Deploy to Partial
+                deployment: test
+                script:
+                  - echo "deploying to Partial..."
+                  - ant -buildfile build/build.xml deployCodeRunLocalTests -Dsfdc.username=$default_SFDC_USERNAME$partial_ENV_SUFFIX -Dsfdc.password=$partial_SFDC_PASS$partial_SFDC_TOKEN -Dsfdc.serverurl=https://$partial_SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL
+        Deploy To Full:
+            - step:
+                name: Deploy to Full
+                deployment: staging
+                script:
+                  - echo "deploying to Full..."
+                  - ant -buildfile build/build.xml deployCodeRunLocalTests -Dsfdc.username=$default_SFDC_USERNAME$full_ENV_SUFFIX -Dsfdc.password=$full_SFDC_PASS$full_SFDC_TOKEN -Dsfdc.serverurl=https://$full_SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL
+        Deploy To Prod:
+            - step:
+                name: Deploy to Prod
+                deployment: production
+                script:
+                  - echo "deploying to Production..."
+                  - ant -buildfile build/build.xml deployCodeRunLocalTests -Dsfdc.username=$default_SFDC_USERNAME -Dsfdc.password=$prod_SFDC_PASS$prod_SFDC_TOKEN -Dsfdc.serverurl=https://$prod_SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL
+        Refresh Partial:
+            - step:
+                name: Refresh Partial
+                script:
+                  - (mkdir -p ~/.ssh ; cat my_known_hosts >> ~/.ssh/known_hosts; umask  077 ; echo $SSH_KEY | base64 -d > ~/.ssh/id_rsa)
+                  # Set up repo and checkout master
+                  - git remote set-url origin git@bitbucket.org:$BITBUCKET_REPO_OWNER/$BITBUCKET_REPO_SLUG.git
+                  - git config --add remote.origin.fetch +refs/heads/*:refs/remotes/origin/*
+                  - git fetch
+                  - git checkout master
+                  - echo "refreshing Partial..."
+                  - ant -buildfile build/build.xml retrieveAll -Dsfdc.username=$default_SFDC_USERNAME$partial_ENV_SUFFIX -Dsfdc.password=$partial_SFDC_PASS$partial_SFDC_TOKEN -Dsfdc.serverurl=https://$partial_SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL                  
+                  - echo "committing code updates..."
+                  # Commit any changes to master
+                  - git add src/*
+                  - git config user.name "$gitMasterEmail"
+                  - git config user.email "$gitMasterName"
+                  - if [[ -n $(git status -s) ]] ; then filelist=`git status -s` ; git commit -a -m "Regular Refresh & Commit" -m "$filelist" ; git push origin master:master ; else echo "No changes detected"; fi
+        Refresh Full:
+            - step:
+                name: Refresh Full
+                script:
+                  - (mkdir -p ~/.ssh ; cat my_known_hosts >> ~/.ssh/known_hosts; umask  077 ; echo $SSH_KEY | base64 -d > ~/.ssh/id_rsa)
+                  # Set up repo and checkout master
+                  - git remote set-url origin git@bitbucket.org:$BITBUCKET_REPO_OWNER/$BITBUCKET_REPO_SLUG.git
+                  - git config --add remote.origin.fetch +refs/heads/*:refs/remotes/origin/*
+                  - git fetch
+                  - git checkout master
+                  - echo "refreshing Full..."
+                  - ant -buildfile build/build.xml retrieveAll -Dsfdc.username=$default_SFDC_USERNAME$full_ENV_SUFFIX -Dsfdc.password=$full_SFDC_PASS$full_SFDC_TOKEN -Dsfdc.serverurl=https://$full_SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL                  
+                  - echo "committing code updates..."
+                  # Commit any changes to master
+                  - git add src/*
+                  - git config user.name "$gitMasterEmail"
+                  - git config user.email "$gitMasterName"
+                  - if [[ -n $(git status -s) ]] ; then filelist=`git status -s` ; git commit -a -m "Regular Refresh & Commit" -m "$filelist" ; git push origin master:master ; else echo "No changes detected"; fi
+        Refresh Prod:
+            - step:
+                name: Refresh Prod
+                script:
+                  - (mkdir -p ~/.ssh ; cat my_known_hosts >> ~/.ssh/known_hosts; umask  077 ; echo $SSH_KEY | base64 -d > ~/.ssh/id_rsa)
+                  # Set up repo and checkout master
+                  - git remote set-url origin git@bitbucket.org:$BITBUCKET_REPO_OWNER/$BITBUCKET_REPO_SLUG.git
+                  - git config --add remote.origin.fetch +refs/heads/*:refs/remotes/origin/*
+                  - git fetch
+                  - git checkout master
+                  - echo "refreshing Production..."
+                  - ant -buildfile build/build.xml retrieveAll -Dsfdc.username=$default_SFDC_USERNAME -Dsfdc.password=$prod_SFDC_PASS$prod_SFDC_TOKEN -Dsfdc.serverurl=https://$prod_SFDC_SERVERURL                  
+                  - echo "committing code updates..."
+                  # Commit any changes to master
+                  - git add src/*
+                  - git config user.name "$gitMasterEmail"
+                  - git config user.email "$gitMasterName"
+                  - if [[ -n $(git status -s) ]] ; then filelist=`git status -s` ; git commit -a -m "Regular Refresh & Commit" -m "$filelist" ; git push origin master:master ; else echo "No changes detected"; fi
+        Run All Tests Partial:
+            - step:
+                name: Run All Tests Partial
+                script:
+                  - echo "Running Tests in Partial..."
+                  - ant -buildfile build/build.xml deployCodeCheckOnly -Dsfdc.username=$default_SFDC_USERNAME$partial_ENV_SUFFIX -Dsfdc.password=$partial_SFDC_PASS$partial_SFDC_TOKEN -Dsfdc.serverurl=https://$partial_SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL
+        Run All Tests Full:
+            - step:
+                name: Run All Tests Full
+                script:
+                  - echo "Running Tests in Full..."
+                  - ant -buildfile build/build.xml deployCodeCheckOnly -Dsfdc.username=$default_SFDC_USERNAME$full_ENV_SUFFIX -Dsfdc.password=$full_SFDC_PASS$full_SFDC_TOKEN -Dsfdc.serverurl=https://$full_SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL
+        Run All Tests Prod:
+            - step:
+                name: Run All Tests Prod
+                script:
+                  - echo "Running Tests in Production..."
+                  - ant -buildfile build/build.xml deployCodeCheckOnly -Dsfdc.username=$default_SFDC_USERNAME -Dsfdc.password=$prod_SFDC_PASS$prod_SFDC_TOKEN -Dsfdc.serverurl=https://$prod_SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL
+        Validate:
+            - step:
+                name: validate against current environment
+                script:
+                  - echo "Running Tests..."
+                  - ant -buildfile build/build.xml deployCodeCheckOnly -Dsfdc.username=$default_SFDC_USERNAME$ENV_SUFFIX -Dsfdc.password=$SFDC_PASS$SFDC_TOKEN -Dsfdc.serverurl=https://$SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL          
+        Validate Integration:
+            - step:
+                name: Validate Integration
+                deployment: test
+                script:
+                  - echo "validating Integration..."
+                  - ant -buildfile build/build.xml deployCodeCheckOnly -Dsfdc.username=$default_SFDC_USERNAME$intg_ENV_SUFFIX -Dsfdc.password=$intg_SFDC_PASS$intg_SFDC_TOKEN -Dsfdc.serverurl=https://$intg_SFDC_SERVERURL  -Dsfdc.maxPoll=$MAX_POLL         
+        Validate Partial:
+            - step:
+                name: Validate Partial
+                deployment: test
+                script:
+                  - echo "validating Partial..."
+                  - ant -buildfile build/build.xml deployCodeCheckOnly -Dsfdc.username=$default_SFDC_USERNAME$partial_ENV_SUFFIX -Dsfdc.password=$partial_SFDC_PASS$partial_SFDC_TOKEN -Dsfdc.serverurl=https://$partial_SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL
+        Deploy:
+          - step:
+              name: Deploy to Current Environment
+              script:
+                - echo "deploying to Current Environment..."
+                - ant -buildfile build/build.xml deployCodeRunLocalTests -Dsfdc.username=$default_SFDC_USERNAME$ENV_SUFFIX -Dsfdc.password=$ENV_SFDC_PASS$ENV_SFDC_TOKEN -Dsfdc.serverurl=https://$ENV_SFDC_SERVERURL -Dsfdc.maxPoll=$MAX_POLL
